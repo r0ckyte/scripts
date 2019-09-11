@@ -1,0 +1,51 @@
+#!/bin/sh
+
+tempdir="$(mktemp -d)"
+Docker_list_file="$tempdir"/docker_container_list
+Unhealthy_Container_list="$tempdir"/Unhealthy_container_list
+
+delete_temp_files ()
+{
+        rm -f "$Docker_list_file" "$Unhealthy_Container_list"
+        rmdir "$tempdir"
+}
+
+trap delete_temp_files EXIT
+sudo /usr/local/bin/docker-ps.sh >"$Docker_list_file"
+Docker_Status="$?"
+Container_count="$(cat "$Docker_list_file"|wc -l)"
+
+if [ "$Docker_Status" -ne "0" ]
+   then
+        echo Docker Service is not responding on "$HOSTNAME"
+        exit 2
+else
+        echo "Docker Service: OK"
+	if [ "$Container_count" -lt "2" ]
+	then
+	 echo Containers running: 0
+	 exit 0
+	else
+	 echo Containers running: "$( expr "$Container_count" - 1 )"
+         touch "$Unhealthy_Container_list"
+	fi
+        for CONTAINER_ID in `cat "$Docker_list_file"|grep -v "CONTAINER\ "|awk -F" " '{print $1}'`
+        do
+         sudo /usr/local/bin/docker-exec-hostname.sh "$CONTAINER_ID"
+         CONTAINER_STATUS="$?"
+                if [ "$CONTAINER_STATUS" -ne "0" ]
+                then
+                        grep "$CONTAINER_ID" "$Docker_list_file" >>"$Unhealthy_Container_list"
+                fi
+        done
+fi
+
+if [ -s "$Unhealthy_Container_list" ]
+then
+        echo Below Docker Containers are not responding on "$HOSTNAME"
+        cat "$Unhealthy_Container_list"|awk -F" " '{print $1,$2}'
+        exit 1
+fi
+
+echo "All Docker containers: OK"
+exit 0
