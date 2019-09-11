@@ -1,0 +1,3 @@
+#!/bin/bash
+dirs=($(find /opt/deploy/ -maxdepth 1 -mindepth 1 -type d))
+for d in “${dirs[@]}“; do (cd “$d” && git clean -d -x -f); done
